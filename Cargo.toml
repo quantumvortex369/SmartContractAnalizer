@@ -1,0 +1,21 @@
+[package]
+name = "smart_contract_analyzer"
+version = "0.1.0"
+edition = "2021"
+authors = ["Tu Nombre"]
+description = "Analizador de contratos inteligentes de Ethereum para detectar posibles estafas"
+repository = ""
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1.0", features = ["full"] }
+web3 = { version = "0.18", features = ["http"] }
+hex = "0.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+anyhow = "1.0"
+thiserror = "1.0"
+regex = "1.5"
+clap = { version = "4.0", features = ["derive"] }
+colored = "2.0"
+reqwest = { version = "0.11", features = ["json"] }
