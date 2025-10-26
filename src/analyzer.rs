@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 use regex::Regex;
 use crate::error::Result;
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ContractAnalysis {
     pub contract_address: String,
     pub is_verified: bool,
@@ -11,7 +11,7 @@ pub struct ContractAnalysis {
     pub is_suspicious: bool,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Clone, Copy)]
 pub enum Severity {
     High,
     Medium,
@@ -19,7 +19,7 @@ pub enum Severity {
     Info,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Finding {
     pub title: String,
     pub description: String,
