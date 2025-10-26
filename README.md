@@ -50,7 +50,7 @@ Contrato: 0x1234...
 Verificado: Sí
 Puntuación de riesgo: 75.00% (Alto)
 
-¡Advertencia! ⚠️ Este contrato ha sido marcado como sospechoso
+¡Advertencia! Este contrato ha sido marcado como sospechoso
 
 Hallazgos:
 
