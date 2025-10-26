@@ -1,0 +1,58 @@
+# Para archivos de texto, normaliza los finales de línea a LF
+* text=auto eol=lf
+
+# Para archivos binarios, asegura que Git no los modifique
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.gz binary
+*.tar binary
+*.so binary
+*.dll binary
+*.exe binary
+*.dylib binary
+*.a binary
+*.lib binary
+
+# Para archivos específicos de Rust
+*.rs text diff=rust
+Cargo.toml text
+Cargo.lock text
+
+# Para archivos de documentación
+*.md text
+*.txt text
+
+# Archivos de configuración
+.gitattributes text
+.gitignore text
+
+# Archivos de entorno (no deberían estar en el repositorio)
+.env text eol=lf
+.env.* text eol=lf
+
+# Archivos del sistema operativo
+.DS_Store
+Thumbs.db
+
+# Archivos de editores
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Archivos de Rust
+/target/
+**/*.rs.bk
+
+# Archivos de compilación
+debug/
+release/
+
+# Archivos de Cargo
+Cargo.lock
