@@ -1,19 +1,21 @@
-use clap::Parser;
-use colored::*;
-use serde_json::json;
-use std::process;
-
 mod analyzer;
 mod error;
+mod gui;
 
+use clap::Parser;
+use colored::*;
+use eframe::egui;
+use serde_json::json;
+use std::process;
 use crate::analyzer::{ContractAnalyzer, ContractAnalysis};
+use crate::gui::start_gui;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
-    /// Dirección del contrato a analizar
+    /// Dirección del contrato a analizar (opcional para modo GUI)
     #[clap(short, long)]
-    address: String,
+    address: Option<String>,
 
     /// URL del nodo Ethereum RPC (por defecto: infura mainnet)
     #[clap(short, long, default_value = "https://mainnet.infura.io/v3/YOUR-INFURA-KEY")]
@@ -22,27 +24,39 @@ struct Args {
     /// Formato de salida (texto o json)
     #[clap(short, long, default_value = "text")]
     output: String,
+
+    /// Usar interfaz gráfica
+    #[clap(short, long)]
+    gui: bool,
 }
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), eframe::Error> {
     let args = Args::parse();
 
-    // Validar la dirección del contrato
-    if !is_valid_ethereum_address(&args.address) {
+    // Si se especificó la opción de GUI o no se proporcionó una dirección, iniciar la interfaz gráfica
+    if args.gui || args.address.is_none() {
+        return start_gui(args.rpc_url);
+    }
+
+    // Modo línea de comandos
+    let address = args.address.unwrap();
+    
+    if !is_valid_ethereum_address(&address) {
         eprintln!("{}: Dirección de contrato inválida", "Error".red().bold());
         process::exit(1);
     }
 
     let analyzer = ContractAnalyzer::new(&args.rpc_url);
 
-    match analyzer.analyze_contract(&args.address).await {
+    match analyzer.analyze_contract(&address).await {
         Ok(analysis) => {
             if args.output.to_lowercase() == "json" {
                 print_json(&analysis);
             } else {
                 print_human_readable(&analysis);
             }
+            Ok(())
         }
         Err(e) => {
             eprintln!("{}: {}", "Error".red().bold(), e);
@@ -51,7 +65,8 @@ async fn main() {
     }
 }
 
-fn is_valid_ethereum_address(address: &str) -> bool {
+// Función para validar direcciones Ethereum
+pub fn is_valid_ethereum_address(address: &str) -> bool {
     if !address.starts_with("0x") || address.len() != 42 {
         return false;
     }
