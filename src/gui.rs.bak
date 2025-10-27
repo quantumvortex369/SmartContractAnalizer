@@ -1,0 +1,378 @@
+use eframe::egui;
+use std::sync::mpsc;
+use std::sync::Arc;
+use tokio::runtime::Runtime;
+use crate::analyzer::{ContractAnalysis, Finding, Severity};
+use crate::is_valid_ethereum_address;
+use egui::{Color32, RichText, FontId};
+use std::time::Duration;
+
+#[derive(Default)]
+pub struct SmartContractAnalyzerApp {
+    rpc_url: String,
+    contract_address: String,
+    is_analyzing: bool,
+    analysis_result: Option<Result<ContractAnalysis, String>>,
+    rt: Arc<Runtime>,
+    result_receiver: Option<mpsc::Receiver<Result<ContractAnalysis, String>>>,
+    active_tab: String,
+    show_help: bool,
+    last_update: Option<std::time::Instant>,
+}
+
+impl SmartContractAnalyzerApp {
+    pub fn new(rpc_url: String, _cc: &eframe::CreationContext<'_>) -> Self {
+        Self {
+            rpc_url,
+            contract_address: String::new(),
+            is_analyzing: false,
+            analysis_result: None,
+            rt: Arc::new(Runtime::new().expect("No se pudo crear el runtime de Tokio")),
+            result_receiver: None,
+            active_tab: "analyzer".to_string(),
+            show_help: false,
+            last_update: None,
+        }
+    }
+    
+    fn analyze_contract(&mut self) {
+        if self.contract_address.trim().is_empty() {
+            self.analysis_result = Some(Err("Por favor ingresa una dirección de contrato".to_string()));
+            return;
+        }
+        
+        if !is_valid_ethereum_address(&self.contract_address) {
+            self.analysis_result = Some(Err("Dirección de contrato inválida".to_string()));
+            return;
+        }
+        
+        self.is_analyzing = true;
+        
+        // Simulación de análisis (en una implementación real, esto sería asíncrono)
+        self.analysis_result = Some(Ok(ContractAnalysis {
+            contract_address: self.contract_address.clone(),
+            is_verified: true,
+            risk_score: 0.3,
+            findings: vec![
+                crate::analyzer::Finding {
+                    title: "Ejemplo de hallazgo".to_string(),
+                    description: "Este es un ejemplo de hallazgo de seguridad".to_string(),
+                    severity: crate::analyzer::Severity::Medium,
+                    code_snippet: Some("function transfer(address to, uint amount) {".to_string()),
+                    reference: Some("EIP-20".to_string()),
+                    impact: "Impacto de ejemplo en la seguridad del contrato".to_string(),
+                    recommendation: Some("Implementar las mejores prácticas de seguridad".to_string()),
+                    category: Some("Seguridad".to_string()),
+                    is_false_positive: false,
+                    detected_at: Some(chrono::Utc::now()),
+                    status: Some("Pendiente".to_string()),
+                },
+            ],
+            is_suspicious: false,
+            contract_name: Some("EjemploContrato".to_string()),
+            compiler_version: Some("0.8.0".to_string()),
+            optimization_used: Some(true),
+            proxy_implementation: None,
+            token_standard: None,
+            created_at_block: None,
+            last_activity: None,
+            transaction_count: 0,
+            verified_source: None,
+            bytecode: None,
+            abi: None,
+            opcodes: None,
+        }));
+        
+        self.is_analyzing = false;
+    }
+}
+
+impl eframe::App for SmartContractAnalyzerApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.heading("🔍 Analizador de Contratos Inteligentes");
+            
+            // Área para ingresar la dirección del contrato
+            ui.label("📋 Dirección del contrato:");
+            let address_edit = egui::TextEdit::singleline(&mut self.contract_address)
+                .hint_text("0x...")
+                .desired_width(400.0);
+            
+            // Crear variables para los estados de los botones
+            let mut analyze_clicked = false;
+            let mut clear_clicked = false;
+            
+            // Layout horizontal para los controles
+            ui.horizontal(|ui| {
+                // Campo de entrada de texto
+                let _ = ui.add(address_edit);
+                
+                // Botones
+                if ui.button("🔍 Analizar").clicked() {
+                    analyze_clicked = true;
+                }
+                
+                if ui.button("🔄 Limpiar").clicked() {
+                    clear_clicked = true;
+                }
+            });
+            
+            // Manejar las acciones de los botones
+            if analyze_clicked {
+                self.analyze_contract();
+            }
+            
+            if clear_clicked {
+                self.contract_address.clear();
+                self.analysis_result = None;
+            }
+            
+            // Mostrar estado del análisis
+            if self.is_analyzing {
+                ui.spinner();
+                ui.label("Analizando contrato...");
+            }
+
+            // Mostrar resultados o errores
+            if let Some(result) = &self.analysis_result {
+                ui.separator();
+                ui.label("📊 Resultados del Análisis:");
+                ui.add_space(10.0);
+                
+                match result {
+                    Ok(analysis) => {
+                        // Mostrar resumen del análisis
+                        ui.label(format!("✅ Contrato: {}", analysis.contract_address));
+                        ui.label(format!("🔍 Verificado: {}", 
+                            if analysis.is_verified { "Sí" } else { "No" }));
+                        
+                        // Mostrar nivel de riesgo
+                        let risk_text = format!("Nivel de riesgo: {:.1}%", 
+                            analysis.risk_score * 100.0);
+                        let risk_label = if analysis.risk_score > 0.7 {
+                            egui::Label::new(egui::RichText::new(risk_text).color(egui::Color32::RED))
+                        } else if analysis.risk_score > 0.4 {
+                            egui::Label::new(egui::RichText::new(risk_text).color(egui::Color32::YELLOW))
+                        } else {
+                            egui::Label::new(egui::RichText::new(risk_text).color(egui::Color32::GREEN))
+                        };
+                        ui.add(risk_label);
+                        
+                        // Mostrar hallazgos
+                        if !analysis.findings.is_empty() {
+                            ui.separator();
+                            
+                            let is_valid = !self.contract_address.trim().is_empty() && 
+                                         is_valid_ethereum_address(&self.contract_address);
+                            
+                            let button = ui.add_enabled(!self.is_analyzing && is_valid, 
+                                egui::Button::new("🔍 Analizar")
+                                    .min_size(egui::vec2(100.0, 36.0))
+                            );
+                            
+                            if button.clicked() {
+                                self.analyze_contract();
+                                self.last_update = Some(std::time::Instant::now());
+                            }
+                            
+                            // Enfocar el campo de texto al inicio
+                            if self.last_update.is_none() {
+                                response.request_focus();
+                            }
+                        });
+                        
+                        if !self.contract_address.is_empty() && !is_valid_ethereum_address(&self.contract_address) {
+                            ui.label(
+                                RichText::new("⚠️ Dirección de contrato inválida")
+                                    .color(Color32::RED)
+                            );
+                        }
+                    });
+                });
+            
+            ui.add_space(20.0);
+            
+            // Panel de resultados
+            egui::Frame::group(ui.style())
+                .fill(ui.style().visuals.window_fill())
+                .show(ui, |ui| {
+                    if self.is_analyzing {
+                        self.show_loading_indicator(ui);
+                    } else if let Some(result) = &self.analysis_result {
+                        match result {
+                            Ok(analysis) => self.show_analysis_results(ui, analysis),
+                            Err(e) => {
+                                ui.label(
+                                    RichText::new(format!("❌ Error: {}", e))
+                                        .color(Color32::RED)
+                                );
+                            }
+                        }
+                    } else {
+                        ui.label("Ingresa una dirección de contrato para comenzar el análisis.");
+                    }
+                });
+        });
+    }
+    
+    fn show_loading_indicator(&self, ui: &mut egui::Ui) {
+        let time = self.last_update
+            .map(|t| t.elapsed().as_secs_f32())
+            .unwrap_or(0.0);
+        
+        let dots = "•".repeat(1 + (time * 2.0) as usize % 4);
+        
+        ui.vertical_centered_justified(|ui| {
+            ui.add_space(20.0);
+            ui.spinner();
+            ui.add_space(10.0);
+            ui.label(format!("Analizando contrato {}", dots));
+        });
+    }
+    
+    fn show_analysis_results(&self, ui: &mut egui::Ui, analysis: &ContractAnalysis) {
+        ui.heading("📊 Resultados del Análisis");
+        ui.separator();
+        
+        // Resumen del contrato
+        ui.label(RichText::new("📋 Información del Contrato").heading());
+        ui.horizontal(|ui| {
+            ui.label("Dirección:");
+            ui.monospace(&analysis.contract_address);
+        });
+        
+        // Barra de progreso de riesgo
+        ui.add_space(10.0);
+        ui.label(RichText::new("📈 Nivel de Riesgo").heading());
+        let risk_percent = (analysis.risk_score * 100.0) as u32;
+        let risk_color = if risk_percent > 70 {
+            Color32::RED
+        } else if risk_percent > 40 {
+            Color32::YELLOW
+        } else {
+            Color32::GREEN
+        };
+        
+        ui.add(
+            egui::ProgressBar::new(analysis.risk_score as f32)
+                .text(format!("{}%", risk_percent))
+                .fill(risk_color)
+                .show_percentage()
+        );
+        
+        // Hallazgos de seguridad
+        ui.add_space(20.0);
+        ui.label(RichText::new("🔍 Hallazgos de Seguridad").heading());
+        
+        if analysis.findings.is_empty() {
+            ui.label("✅ No se encontraron problemas de seguridad críticos.");
+            return;
+        }
+        
+        // Agrupar hallazgos por severidad
+        let mut findings_by_severity = std::collections::BTreeMap::new();
+        for finding in &analysis.findings {
+            findings_by_severity
+                .entry(finding.severity)
+                .or_insert_with(Vec::new)
+                .push(finding);
+        }
+        
+        // Mostrar hallazgos agrupados por severidad
+        for (severity, findings) in findings_by_severity.into_iter().rev() {
+            let severity_text = match severity {
+                Severity::Critical => "❌ Crítico",
+                Severity::High => "⚠️ Alto",
+                Severity::Medium => "⚠️ Medio",
+                Severity::Low => "ℹ️ Bajo",
+                Severity::Info => "ℹ️ Informativo",
+            };
+            
+            egui::CollapsingHeader::new(format!("{} ({}) {}", 
+                severity_text, 
+                findings.len(),
+                if severity == Severity::Critical || severity == Severity::High {
+                    "🚨"
+                } else {
+                    ""
+                }
+            ))
+            .default_open(severity == Severity::Critical || severity == Severity::High)
+            .show(ui, |ui| {
+                for finding in findings {
+                    egui::Frame::group(ui.style())
+                        .fill(ui.visuals().window_fill().linear_multiply(0.8))
+                        .show(ui, |ui| {
+                            ui.horizontal(|ui| {
+                                ui.vertical(|ui| {
+                                    ui.label(
+                                        RichText::new(&finding.title)
+                                            .color(SmartContractAnalyzerApp::get_severity_color(&severity))
+                                            .strong()
+                                    );
+                                    
+                                    if let Some(desc) = &finding.description {
+                                        ui.label(desc);
+                                    }
+                                    
+                                    if let Some(recommendation) = &finding.recommendation {
+                                        ui.add_space(5.0);
+                                        ui.horizontal(|ui| {
+                                            ui.label("💡 Recomendación:");
+                                            ui.label(recommendation);
+                                        });
+                                    }
+                                });
+                            });
+                        });
+                    
+                    ui.add_space(5.0);
+                }
+            });
+        }
+    }
+    
+    fn show_history_tab(&self, ui: &mut egui::Ui) {
+        ui.vertical_centered_justified(|ui| {
+            ui.heading("📜 Historial de Análisis");
+            ui.label("Próximamente: Historial de análisis recientes");
+        });
+    }
+    
+    fn show_settings_tab(&mut self, ui: &mut egui::Ui) {
+        ui.vertical_centered_justified(|ui| {
+            ui.heading("⚙️ Configuración");
+            ui.separator();
+            
+            ui.label("Configuración de la red:");
+            ui.horizontal(|ui| {
+                ui.label("URL del nodo RPC:");
+                ui.text_edit_singleline(&mut self.rpc_url);
+            });
+            
+            ui.add_space(10.0);
+            
+            if ui.button("Guardar configuración").clicked() {
+                // Aquí iría la lógica para guardar la configuración
+                ui.label("✅ Configuración guardada");
+            }
+        });
+    }
+}
+
+pub fn start_gui(rpc_url: String) -> Result<(), Box<dyn std::error::Error>> {
+    let options = eframe::NativeOptions {
+        viewport: egui::ViewportBuilder::default()
+            .with_inner_size([900.0, 700.0])
+            .with_min_inner_size([600.0, 400.0]),
+        ..Default::default()
+    };
+
+    eframe::run_native(
+        "Smart Contract Analyzer",
+        options,
+        Box::new(|cc| {
+            Box::new(SmartContractAnalyzerApp::new(rpc_url, cc))
+        }),
+    ).map_err(|e| e.into())
+}
