@@ -1,13 +1,14 @@
 mod analyzer;
 mod error;
 mod gui;
+mod security;
 
 use clap::Parser;
 use colored::*;
-use eframe::egui;
 use serde_json::json;
 use std::process;
-use crate::analyzer::{ContractAnalyzer, ContractAnalysis};
+use tokio::runtime::Runtime;
+use crate::analyzer::{Network, ContractAnalyzer, ContractAnalysis};
 use crate::gui::start_gui;
 
 #[derive(Parser, Debug)]
@@ -21,6 +22,10 @@ struct Args {
     #[clap(short, long, default_value = "https://mainnet.infura.io/v3/YOUR-INFURA-KEY")]
     rpc_url: String,
 
+    /// Clave API de Etherscan (por defecto: YOUR-ETHERSCAN-API-KEY)
+    #[clap(short, long, default_value = "YOUR-ETHERSCAN-API-KEY")]
+    etherscan_key: String,
+
     /// Formato de salida (texto o json)
     #[clap(short, long, default_value = "text")]
     output: String,
@@ -30,13 +35,15 @@ struct Args {
     gui: bool,
 }
 
-#[tokio::main]
-async fn main() -> Result<(), eframe::Error> {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Args::parse();
 
+    // Configurar el runtime de Tokio
+    let rt = Runtime::new().expect("No se pudo crear el runtime de Tokio");
+    
     // Si se especificó la opción de GUI o no se proporcionó una dirección, iniciar la interfaz gráfica
     if args.gui || args.address.is_none() {
-        return start_gui(args.rpc_url);
+        return start_gui(args.rpc_url).map_err(|e| e.into());
     }
 
     // Modo línea de comandos
@@ -47,9 +54,13 @@ async fn main() -> Result<(), eframe::Error> {
         process::exit(1);
     }
 
-    let analyzer = ContractAnalyzer::new(&args.rpc_url);
+    // Crear el analizador con la red principal por defecto
+    let analyzer = rt.block_on(async {
+        ContractAnalyzer::new(&args.rpc_url, Network::Mainnet)
+    })?;
 
-    match analyzer.analyze_contract(&address).await {
+    // Ejecutar el análisis
+    match rt.block_on(analyzer.analyze_contract(&address)) {
         Ok(analysis) => {
             if args.output.to_lowercase() == "json" {
                 print_json(&analysis);
@@ -81,12 +92,16 @@ fn print_human_readable(analysis: &ContractAnalysis) {
     println!("{}: {}", "Verificado".bold(), if analysis.is_verified { "Sí" } else { "No" });
     
     // Calcular el nivel de riesgo
-    let risk_level = if analysis.risk_score > 0.7 {
+    let risk_level = if analysis.risk_score > 0.8 {
+        "Crítico".red().bold()
+    } else if analysis.risk_score > 0.6 {
         "Alto".red().bold()
     } else if analysis.risk_score > 0.4 {
         "Medio".yellow().bold()
-    } else {
+    } else if analysis.risk_score > 0.2 {
         "Bajo".green().bold()
+    } else {
+        "Mínimo".green()
     };
     
     println!("{}: {:.2}% ({})", "Puntuación de riesgo".bold(), analysis.risk_score * 100.0, risk_level);
@@ -99,6 +114,7 @@ fn print_human_readable(analysis: &ContractAnalysis) {
         println!("\n{}", "Hallazgos:".bold().underline());
         for (i, finding) in analysis.findings.iter().enumerate() {
             let severity = match finding.severity {
+                crate::analyzer::Severity::Critical => "CRÍTICO".red().bold(),
                 crate::analyzer::Severity::High => "ALTO".red().bold(),
                 crate::analyzer::Severity::Medium => "MEDIO".yellow().bold(),
                 crate::analyzer::Severity::Low => "BAJO".yellow(),
@@ -129,6 +145,7 @@ fn print_json(analysis: &ContractAnalysis) {
                 "title": f.title,
                 "description": f.description,
                 "severity": match f.severity {
+                    crate::analyzer::Severity::Critical => "critical",
                     crate::analyzer::Severity::High => "high",
                     crate::analyzer::Severity::Medium => "medium",
                     crate::analyzer::Severity::Low => "low",
