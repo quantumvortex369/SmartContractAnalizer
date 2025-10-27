@@ -14,12 +14,31 @@ serde_json = "1.0"
 thiserror = "1.0"
 regex = "1.5"
 hex = "0.4"
-ethers = { version = "2.0", features = ["rustls"] }
+ethers = { version = "2.0", features = ["rustls", "ws"] }
 ethers-solc = { version = "2.0", features = ["full"] }
-reqwest = { version = "0.11", features = ["json"] }
+reqwest = { version = "0.11", features = ["json", "stream", "multipart"] }
 tokio = { version = "1.0", features = ["full"] }
 eframe = "0.24.1"
 egui = "0.24.1"
 clap = { version = "4.0", features = ["derive"] }
 colored = "2.0"
 web3 = { version = "0.18", features = ["http"] }
+chrono = { version = "0.4", features = ["serde"] }
+log = "0.4"
+env_logger = "0.10"
+
+# Dependencias para el análisis de seguridad
+lazy_static = "1.4.0"  # Para patrones de expresión regular estáticos
+
+# Otras dependencias
+lru = "0.10.0"  # Para la caché
+rayon = "1.5"    # Para procesamiento paralelo
+once_cell = "1.10"  # Para inicialización perezosa
+rustc-hash = "1.1"  # Hasher más rápido para caché
+itertools = "0.10"  # Utilidades para iteradores
+hex-literal = "0.3" # Para literales hex en tiempo de compilación
+base64 = "0.21"    # Para decodificar código de contrato
+sha3 = "0.10"      # Para hashing
+
+# Para análisis de transacciones
+tokio-stream = { version = "0.1", features = ["sync"] }
